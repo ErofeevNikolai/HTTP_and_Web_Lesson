@@ -1,5 +1,6 @@
 package ru.netology;
 
+import javax.sound.midi.Soundbank;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -9,16 +10,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Run implements Runnable {
     final List<String> validPaths = List.of("/index.html",
             "/spring.svg", "/spring.png", "/resources.html",
             "/styles.css", "/app.js", "/links.html", "/forms.html",
-            "/classic.html", "/events.html", "/events.js");
-    Socket socket;
+            "/classic.html", "/events.html", "/events.js", "/messages");
+    private final Socket socket;
+    private Request request;
+    private ConcurrentHashMap<String, Map<String, Handler>> mapHandle;
 
-    Run(Socket socket) {
+    Run(Socket socket, ConcurrentHashMap concurrentHashMap) {
         this.socket = socket;
+        this.mapHandle = concurrentHashMap;
     }
 
     @Override
@@ -31,6 +37,16 @@ public class Run implements Runnable {
 
             if (parts.length != 3) {
                 return;
+            }
+
+            //Создаем объект запроса
+            request = new Request(requestLine);
+
+            // если метод и путь есть в коллекции обрабатываем запрос
+            if (mapHandle.containsKey(request.getMethod())) {
+                if (mapHandle.get(request.getMethod()).containsKey(request.getPath())) {
+                    mapHandle.get(request.getMethod()).get(request.getPath()).handle(request, out);
+                }
             }
 
             final var path = parts[1];
@@ -47,6 +63,8 @@ public class Run implements Runnable {
 
             final var filePath = Path.of(".", "public", path);
             final var mimeType = Files.probeContentType(filePath);
+
+            //обработка запроса
 
             if (path.equals("/classic.html")) {
                 final var template = Files.readString(filePath);
